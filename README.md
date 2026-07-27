@@ -45,14 +45,7 @@ python kube_bench.py --trials 1
 ```
 
 Both benchmark drivers also accept `--workers N` for parallel, independent
-trials. These parameter sets are intentionally expensive. A smaller Cube smoke
-benchmark can be run without changing the source:
-
-```sh
-python -c 'from cube_bench import run_trials; from cube_params import CUBE_TEST_PARAMS; run_trials(CUBE_TEST_PARAMS, 1)'
-```
-
-Run the assertion-based proof-of-concept checks with:
+trials. These parameter sets are intentionally expensive. Run the assertion-based proof-of-concept checks with:
 
 ```sh
 python windmill_proof_of_concept.py
