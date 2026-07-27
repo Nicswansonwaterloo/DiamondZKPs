@@ -1,9 +1,14 @@
 from sage.all import GF, Integer, ceil, floor, gcd, is_prime, log_b, previous_prime
 
 
-def generate_params(security_level=128, search_radius=10, heuristic=False):
+def generate_params(
+    security_level=128,
+    search_radius=10,
+    heuristic=False,
+    max_cofactor=None,
+):
     """
-    Search for Kani parameters with ``p = 4 * 2^e2 * 3^e3 - 1``. If ``heuristic`` is True,
+    Search for Kani parameters with ``p = 4 * 2^e2 * 3^e3 * c - 1``. If ``heuristic`` is True,
     we take e3 to be roughly 3/2 * e2, otherwise we take e3 approx 3 e2.
     """
     num_reps = ceil(security_level * log_b(2, 3 / 2))
@@ -21,27 +26,26 @@ def generate_params(security_level=128, search_radius=10, heuristic=False):
     def additional_constraint(p):
         return p % 4 == 3
 
-    minimal_p = None
-    best_exponents = None
-    best_cofactor = None
+    max_cofactor = max_cofactor or security_level + 2 * search_radius
+    candidates = []
     for e2 in range(e2_needed, e2_needed + search_radius):
         for e3 in range(e3_needed, e3_needed + search_radius):
-            # for c in range(1, security_level + 1 + 2 * search_radius): # c is a small cofactor
-            for c in range(1, 2):
+            for c in range(1, max_cofactor + 1):
                 if c % 3 == 0 or c % 2 == 0:
                     continue
 
                 p = 4 * Integer(2) ** e2 * Integer(3) ** e3 * Integer(c) - 1
-                if is_prime(p) and (minimal_p is None or p < minimal_p) and additional_constraint(p):
-                    minimal_p = p
-                    best_exponents = (e2, e3)
-                    best_cofactor = c
+                if additional_constraint(p):
+                    candidates.append((p, e2, e3, c))
 
-    if best_exponents is None:
+    selected = next(
+        (candidate for candidate in sorted(candidates) if is_prime(candidate[0])),
+        None,
+    )
+    if selected is None:
         raise ValueError("No prime found in the requested exponent search window.")
 
-    e2, e3 = best_exponents
-    c = best_cofactor
+    _, e2, e3, c = selected
     N = Integer(2) ** e2
     M = Integer(3) ** e3
     p = 4 * N * M * c - 1
@@ -68,33 +72,56 @@ def generate_params(security_level=128, search_radius=10, heuristic=False):
     return p, N, e2, M, e3, c, A, B, num_reps, GF(p**2, modulus=[1, 0, 1], names="i")
 
 
+# 128-bit parameters.
+KANI_128_PARAMS = [
+    Integer(4 * 2**237 * 3**445 * 25 - 1),
+    Integer(2**237),
+    Integer(237),
+    Integer(3**445),
+    Integer(445),
+    Integer(25),
+    Integer(110427941548649020598956093796432407239217743554726184882600387580783369),
+    Integer(110427941548649020598956093796432407239217743554726184882600387580794103),
+    Integer(219),
+    GF((4 * 2**237 * 3**445 * 25 - 1)**2, modulus=[1, 0, 1], names='i')
+]
+
+
 # 128-bit parameters, heuristic.
 KANI_128_PARAMS_HEUR = [
-    Integer(4 * 2**244 * 3**245 * 1 - 1),
-    Integer(2**244),
-    Integer(244),
-    Integer(3**245),
-    Integer(245),
-    Integer(1),
-    Integer(14134776518227074636666380005943348126619871175004951664972849610340947393),
-    Integer(14134776518227074636666380005943348126619871175004951664972849610340969023),
+    Integer(4 * 2**236 * 3**223 * 43 - 1),
+    Integer(2**236),
+    Integer(236),
+    Integer(3**223),
+    Integer(223),
+    Integer(43),
+    Integer(
+        55213970774324510299478046898216203619608871777363092441300193790377103
+    ),
+    Integer(
+        55213970774324510299478046898216203619608871777363092441300193790411633
+    ),
     Integer(219),
-    GF((4 * 2**244 * 3**245 * 1 - 1)**2, modulus=[1, 0, 1], names='i')
+    GF(
+        (4 * 2**236 * 3**223 * 43 - 1) ** 2,
+        modulus=[1, 0, 1],
+        names="i",
+    ),
 ]
 
 # Small 64-bit-security research parameters (non-heuristic).
-KANI_TEST_PARAMS_64 = [
-    Integer(4 * 2**125 * 3**229 * 1 - 1),
-    Integer(2**125),
-    Integer(125),
-    Integer(3**229),
-    Integer(229),
-    Integer(1),
-    Integer(21267647932558653966460912964485509379),
-    Integer(21267647932558653966460912964485517053),
-    Integer(110),
-    GF((4 * 2**125 * 3**229 * 1 - 1)**2, modulus=[1, 0, 1], names='i')
+KANI_TEST_PARAMS = [
+    Integer(4 * 2**61 * 3**56 * 19 - 1),
+    Integer(2**61),
+    Integer(61),
+    Integer(3**56),
+    Integer(56),
+    Integer(19),
+    Integer(1152921504606846043),
+    Integer(1152921504606847909),
+    Integer(55),
+    GF((4 * 2**61 * 3**56 * 19 - 1)**2, modulus=[1, 0, 1], names='i')
 ]
 
 if __name__ == "__main__":
-    generate_params(security_level=128, search_radius=30, heuristic=True)
+    generate_params(heuristic=True)

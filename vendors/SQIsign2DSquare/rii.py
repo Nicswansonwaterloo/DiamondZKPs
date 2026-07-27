@@ -139,24 +139,40 @@ class GlobalData:
     ExponentFull: int
     ExponentCofactor: int
     Cofactor: Integer
+    AuxiliaryCofactor: Integer
     Fp2: object
     Fp2_i: object
     E0_data: E0Data
 
 
-def make_precomputed_values(p, e2, e3, Fp2=None):
+def make_precomputed_values(p, e2, e3, Fp2=None, auxiliary_cofactor=1):
     """Sage analogue of the Julia parameter files' precomputation routine.
 
     The proof-of-concept reserves two additional rational 2-torsion levels for
     the repository's existing product-isogeny evaluator.  ``ExponentFull``
     remains the exponent of the full-degree RanIso construction.
+
+    Unlike the original SQIsign2DSquare parameters, the ambient prime may have
+    an auxiliary factor:
+
+        p + 1 = 4 * 2^e2 * 3^e3 * auxiliary_cofactor.
+
+    This factor is not part of RanIso's accessible 3-power isogeny.  It only
+    appears in the scalar used by ``torsion_basis`` to project random points
+    onto the required 2- and 3-power torsion.
     """
 
     p = Integer(p)
     N = Integer(2) ** e2
     Cofactor = Integer(3) ** e3
-    if p != 4 * N * Cofactor - 1:
-        raise ValueError("this RanIso port requires p = 4 * 2^e2 * 3^e3 - 1")
+    auxiliary_cofactor = Integer(auxiliary_cofactor)
+    if auxiliary_cofactor < 1:
+        raise ValueError("the auxiliary cofactor must be positive")
+    if p != 4 * N * Cofactor * auxiliary_cofactor - 1:
+        raise ValueError(
+            "this RanIso port requires "
+            "p = 4 * 2^e2 * 3^e3 * auxiliary_cofactor - 1"
+        )
 
     if Fp2 is None:
         Fp2 = GF(p**2, modulus=[1, 0, 1], names="i")
@@ -179,7 +195,16 @@ def make_precomputed_values(p, e2, e3, Fp2=None):
         Matrices_2e=Matrices_2e,
         Matrices_odd=Matrices_odd,
     )
-    return GlobalData(p, e2, e3, Cofactor, Fp2, Fp2_i, E0_data)
+    return GlobalData(
+        p,
+        e2,
+        e3,
+        Cofactor,
+        auxiliary_cofactor,
+        Fp2,
+        Fp2_i,
+        E0_data,
+    )
 
 
 def quaternion_to_matrix(alpha, Ms, order):

@@ -1,7 +1,7 @@
 from sage.all import GF, Integer, ceil, gcd, is_prime, log_b, previous_prime
 
 
-def generate_params(security_level=128, search_radius=20):
+def generate_params(security_level=128, search_radius=20, max_cofactor=None):
     """
     Search for Kube parameters with ``p = 4 * 2^e2 * 3^e3 * c - 1``.
 
@@ -15,24 +15,24 @@ def generate_params(security_level=128, search_radius=20):
     e2_needed = ceil((4 / 3) * (security_level + (memory_limit // 2)))
     e3_needed = ceil(2 * e2_needed * log_b(2, 3))
 
-    minimal_p = None
-    best_exponents = None
-    best_cofactor = None
+    max_cofactor = max_cofactor or security_level + 2 * search_radius
+    candidates = []
     for e2 in range(e2_needed, e2_needed + search_radius):
         for e3 in range(e3_needed, e3_needed + search_radius):
-            # The current RanIso precomputation supports no extra cofactor.
-            for c in range(1, 2):
+            for c in range(1, max_cofactor + 1):
+                if c % 3 == 0 or c % 2 == 0:
+                    continue
                 p = 4 * Integer(2) ** e2 * Integer(3) ** e3 * Integer(c) - 1
-                if is_prime(p) and (minimal_p is None or p < minimal_p):
-                    minimal_p = p
-                    best_exponents = (e2, e3)
-                    best_cofactor = c
+                candidates.append((p, e2, e3, c))
 
-    if best_exponents is None:
+    selected = next(
+        (candidate for candidate in sorted(candidates) if is_prime(candidate[0])),
+        None,
+    )
+    if selected is None:
         raise ValueError("No prime found in the requested exponent search window.")
 
-    e2, e3 = best_exponents
-    c = best_cofactor
+    _, e2, e3, c = selected
     N = Integer(2) ** e2
     C = Integer(3) ** e3
     p = 4 * N * C * c - 1
@@ -63,21 +63,21 @@ def generate_params(security_level=128, search_radius=20):
 
 # Generated with generate_params(security_level=128, search_radius=20).
 KUBE_128_PARAMS = [
-    Integer(4 * 2**239 * 3**303 - 1),
-    Integer(2**239),
-    Integer(239),
-    Integer(3**303),
-    Integer(303),
-    Integer(1),
+    Integer(4 * 2**238 * 3**297 * 25 - 1),
+    Integer(2**238),
+    Integer(238),
+    Integer(3**297),
+    Integer(297),
+    Integer(25),
     Integer(
-        441711766194596082395824375185729628956870974218904739530401550323115701
+        220855883097298041197912187592864814478435487109452369765200775161546677
     ),
     Integer(
-        441711766194596082395824375185729628956870974218904739530401550323194187
+        220855883097298041197912187592864814478435487109452369765200775161608267
     ),
     Integer(398),
     GF(
-        (4 * 2**239 * 3**303 - 1) ** 2,
+        (4 * 2**238 * 3**297 * 25 - 1) ** 2,
         modulus=[1, 0, 1],
         names="i",
     ),
@@ -86,17 +86,17 @@ KUBE_128_PARAMS = [
 
 # Small research parameters used by kube_optimized.py's five-challenge test.
 KUBE_TEST_PARAMS = [
-    Integer(4 * 2**39 * 3**40 - 1),
-    Integer(2**39),
-    Integer(39),
-    Integer(3**40),
-    Integer(40),
-    Integer(1),
-    Integer(274877904601),
-    Integer(274877909287),
+    Integer(4 * 2**32 * 3**38 * 5 - 1),
+    Integer(2**32),
+    Integer(32),
+    Integer(3**38),
+    Integer(38),
+    Integer(5),
+    Integer(2147482367),
+    Integer(2147484929),
     Integer(50),
     GF(
-        (4 * 2**39 * 3**40 - 1) ** 2,
+        (4 * 2**32 * 3**38 * 5 - 1) ** 2,
         modulus=[1, 0, 1],
         names="i",
     ),

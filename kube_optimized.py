@@ -5,8 +5,8 @@ from helpers.helpers import normalize_and_hash
 from helpers.montgomery_helpers import (
     is_supersingular_and_correct_characteristic_kummer,
     kummer_basis_from_points,
-    x_only_linear_comb,
     x_only_is_basis_cube,
+    x_only_linear_comb,
 )
 from helpers.two_dim_utils import get_points_above_kernel
 from helpers.two_dim_wrappers import mapping_E0xE1_to_A_even
@@ -30,7 +30,9 @@ def key_gen(params):
     p, N, e2, C, e3, c, A, B, _, Fp2 = params
 
     # Generate the public Kani diamond.
-    global_data = make_precomputed_values(p, e2, e3, Fp2)
+    global_data = make_precomputed_values(
+        p, e2, e3, Fp2, auxiliary_cofactor=c
+    )
     ran_iso = RanIso(A, global_data)
     E0 = ran_iso.E0
     EA = ran_iso.EA
@@ -443,16 +445,3 @@ def verifier(params, pk, challenge, response, commitment):
         return False
 
     return True
-
-
-if __name__ == "__main__":
-    from kube_params import KUBE_TEST_PARAMS as params
-
-    speed_up_sagemath()
-    sk, pk = key_gen(params)
-    commitment, response_alg = prover(params, sk, pk)
-    for challenge in range(NUM_CHALLENGES):
-        assert verifier(
-            params, pk, challenge, response_alg[challenge], commitment
-        ), f"Verification failed for challenge {challenge}."
-    print("Kube-ZKP test passed")

@@ -22,12 +22,11 @@ alternatives is left as future work.
 
 | Protocol | Security | Prover | Verifier |
 |---|---:|---:|---:|
-| Cube-ZKP | 128 bits | 215 s | 85 s |
-| Kube-ZKP | 128 bits | 724 s | 150 s |
-| Kani-ZKP | 64 bits | 94 s | 4,950 s |
-| Kani-Heuristic | 128 bits | 250 s | 12,264 s |
+| Cube-ZKP | 128 bits | 198 s | 82 s |
+| Kube-ZKP | 128 bits | 626 s | 135 s |
+| Kani-ZKP | 128 bits | 695 s | 16905 s |
+| Kani-Heuristic | 128 bits | 257 s | 3903 s |
 
-The 64-bit Kani-ZKP result is not directly comparable to the 128-bit results.
 Windmill-ZKP was not benchmarked at 128-bit security because the corresponding
 M-SIDH prime exceeds 5,000 bits and is generally incomparable.
 

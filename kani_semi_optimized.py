@@ -33,7 +33,9 @@ def key_gen(params):
     p, N, e2, M, e3, c, A, B, _, Fp2 = params
 
     # This is the full-degree RanIso construction, not ImRanIso.
-    global_data = make_precomputed_values(p, e2, e3, Fp2)
+    global_data = make_precomputed_values(
+        p, e2, e3, Fp2, auxiliary_cofactor=c
+    )
     ran_iso = RanIso(A, global_data, compute_odd_points=True)
 
     E0 = ran_iso.E0
@@ -257,36 +259,44 @@ def verifier(params, pk, challenge, response, commitment):
     return True
 
 
+def run_trial(trial_num, trials, params):
+    while True:
+        sk, pk = key_gen(params)
+        
+        start_prover = time.time()
+        commitment, response_alg = prover(params, sk, pk)
+        prover_time = time.time() - start_prover
+        
+        try:
+            start_verifier = time.time()
+            for challenge in range(3):
+                assert verifier(params, pk, challenge, response_alg[challenge], commitment)
+            verifier_time = time.time() - start_verifier
+            verifier_time /= 3  # Average over the three challenges
+            
+            return prover_time, verifier_time
+        except ValueError:
+            pass
+
+
 if __name__ == "__main__":
     import time
+    from multiprocessing import Pool
     speed_up_sagemath()
     from kani_params import KANI_128_PARAMS_HEUR as params
 
-    prover_times = []
-    verifier_times = []
-    trials = 2
-
-    for trial in range(trials):
-        while True:
-            sk, pk = key_gen(params)
-            
-            start_prover = time.time()
-            commitment, response_alg = prover(params, sk, pk)
-            prover_time = time.time() - start_prover
-            
-            try:
-                start_verifier = time.time()
-                for challenge in range(3):
-                    assert verifier(params, pk, challenge, response_alg[challenge], commitment)
-                verifier_time = time.time() - start_verifier
-                
-                prover_times.append(prover_time)
-                verifier_times.append(verifier_time)
-                break
-            except ValueError:
-                print("Odd isogeny contains an intermediate product. Trying again.")
+    trials = 16
+    num_reps = params[8]
+    
+    with Pool(processes=trials) as pool:
+        results = pool.starmap(run_trial, [(i, trials, params) for i in range(trials)])
+    
+    prover_times = [r[0] for r in results]
+    verifier_times = [r[1] for r in results]
     
     avg_prover = sum(prover_times) / len(prover_times)
     avg_verifier = sum(verifier_times) / len(verifier_times)
-    print(f"Average prover time: {avg_prover:.4f} seconds")
-    print(f"Average verifier time: {avg_verifier:.4f} seconds")
+    print(f"Average prover time: {avg_prover:.2f} seconds")
+    print(f"Average verifier time: {avg_verifier:.2f} seconds")
+    print(f"Prover time (after {num_reps} reps): {avg_prover * num_reps:.2f} seconds")
+    print(f"Verifier time (after {num_reps} reps): {avg_verifier * num_reps:.2f} seconds")

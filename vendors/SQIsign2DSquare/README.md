@@ -31,6 +31,12 @@ Here `2^e2` is the degree used by `RanIso`; the two additional rational
 port itself retains the Julia implementation's `product_isogeny_sqrt` chain,
 which only requires the kernel of order `2^e2`.
 
+The integration also accepts a small auxiliary cofactor:
 
-The implementation is currently limited to the exact prime shape
-above and to `3^e3` as the accessible odd degree.
+```
+p + 1 = 4 * 2^e2 * 3^e3 * c.
+```
+
+The factor `c` changes the scalar used to project random curve points onto the
+required torsion, but it is not included in RanIso's accessible odd degree,
+which remains `3^e3`.
