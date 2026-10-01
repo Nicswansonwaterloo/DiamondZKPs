@@ -1,15 +1,14 @@
+from copy import copy
 from itertools import product
 
-from sage.all import GF, Zmod, is_prime_power, matrix, randint
+from sage.all import GF, ZZ, Zmod, is_prime_power, matrix, randint
 
-from helpers.two_dim_wrappers import get_codomain_from_tc_odd, mapping_E0xE1_to_A_even
-from vendors.EllEll_Isogeny_Sage.class_theta import Coord, NullCoord
-from vendors.EllEll_Isogeny_Sage.func_elliptic import (
-    Is_Elliptic_product,
-    Legendre_to_Elliptic,
-    Lv2tnp_to_Legendre,
-    Theta_Hadamard,
-)
+from helpers.product_theta import ProductTheta
+from helpers.theta_arithmetic import ThetaArithmetic, UnsupportedProductError, normalize
+from helpers.three_isogeny import ThreeIsogenyChain
+from vendors.Theta_SageMath.theta_isogenies.product_isogeny import EllipticProductIsogeny
+from vendors.Kummer_Isogeny.kummer_isogeny import KummerLineIsogeny
+from vendors.Kummer_Isogeny.kummer_line import KummerLine
 from vendors.Theta_SageMath.theta_structures.couple_point import CouplePoint
 from vendors.Theta_SageMath.theta_structures.dimension_two import ThetaStructure
 
@@ -59,79 +58,50 @@ def is_basis_product(basis, M, E1, E2):
 
 
 def is_basis_theta(basis, M, theta_struct):
+    """Check exact odd order and independence of the projected 3-torsion."""
     if len(basis) != 4 or M % 3 != 0 or not is_prime_power(M):
         return False
 
-    if any(pt.parent() != theta_struct for pt in basis):
+    if any(P.parent() != theta_struct for P in basis):
         return False
 
-    proj_basis = [(M // 3) * pt for pt in basis]
+    A = ThetaArithmetic(theta_struct.coords())
+    if A.is_product:
+        raise UnsupportedProductError(
+            "Product basis verification needs elliptic component signs"
+        )
 
-    if any(not (3 * pt).is_zero() for pt in proj_basis):
+    exponent = 0
+    remaining = int(M)
+    while remaining > 1:
+        remaining //= 3
+        exponent += 1
+
+    points = [normalize(A.triple_iter(P.coords(), exponent - 1)) for P in basis]
+    if any(P == A.O or normalize(A.triple(P)) != A.O for P in points):
         return False
 
-    # First switch model for tc_point
-    K = theta_struct.base_ring()
-    tc_0 = NullCoord(theta_struct.null_point().coords(), 1, K)
-    Q1, Q2, Q3, Q4 = [Coord(pt.coords(), 1, K) for pt in proj_basis]
-
-    # Here, we must now check that the 3-torsion forms a basis for theta_struct[3].
-    # However, we do not have a direct way to compute the Weil pairing in the theta structure.
-    # This means we have to get a little more creative. We propose the following:
-    # For all 6 unordered pairs (Q_i, Q_j), compute Q_i + Q_j and Q_i - Q_j and successively check for spans
-    # There is no difference between +- Q_i in theta coordinates (x-only coordinate arithmetic like).
-
-    # number of points in <Q_1> == 3, reduced: {Q1} =  1
-    # number of points in <Q_1, Q_2> == 9, reduced: {Q1, Q2, Q1+Q2, Q1-Q2} = 4
-    # number of points in <Q_1, Q_2, Q_3> == 27, reduced: {Q1, Q2, Q3, Q1+Q2, Q1+Q3, Q2+Q3, Q1-Q2, Q1-Q3, Q2-Q3, Q1 + Q2 + Q3, Q1 + Q2 - Q3, Q1 - Q2 - Q3, Q1 - Q2 + Q3} = 13
-    # number of points reduced with all 4 is 40, but we can just check that Q4 is not in the span of the first 3.
-
-    def normalize(pt):
-        coords = pt.numer
-        for x in coords:
-            if x != 0:
-                return tuple(c / x for c in coords)  # Cast to tuple for correct hashing
-        return None
-
-    nQ1 = normalize(Q1)
-    pts_normalized = set([nQ1])
-
-    nQ2 = normalize(Q2)
-    if nQ2 in pts_normalized:
-        return False
-    pts_normalized.add(nQ2)
-
-    Q1_p_Q2, Q1_m_Q2 = tc_0.Normal_Add(Q1, Q2, 2)
-    pts_normalized.add(normalize(Q1_p_Q2))
-    pts_normalized.add(normalize(Q1_m_Q2))
-
-    if len(pts_normalized) != 4:
+    P, Q, R, S = points
+    if Q == P:
         return False
 
-    nQ3 = normalize(Q3)
-    if nQ3 in pts_normalized:
-        return False
-    pts_normalized.add(nQ3)
-
-    # Expand span to 13 combinations by adding ±Q3 to the previous 4 elements
-    for P in [Q1, Q2, Q1_p_Q2, Q1_m_Q2]:
-        P_p_Q3, P_m_Q3 = tc_0.Normal_Add(P, Q3, 2)
-        pts_normalized.add(normalize(P_p_Q3))
-        pts_normalized.add(normalize(P_m_Q3))
-
-    if len(pts_normalized) != 13:
+    PplusQ, PminusQ = A.sums(P, Q)
+    span = {P, Q, PplusQ, PminusQ}
+    if len(span) != 4 or R in span:
         return False
 
-    # Check if Q4 completes the basis (not 0, not in the 3D span)
-    if normalize(Q4) in pts_normalized:
-        return False
+    # Modulo sign, spans of two and three independent 3-torsion points
+    # contain 4 and 13 nonzero points respectively.
+    for T in tuple(span):
+        span.update(A.sums(T, R))
+    span.add(R)
 
-    return True
+    return len(span) == 13 and S not in span
 
 
 def check_prod_isomorphic(E1, E2, F1, F2):
-    j_in = set([E1.j_invariant(), E2.j_invariant()])
-    j_targets = set([F1.j_invariant(), F2.j_invariant()])
+    j_in = {E1.j_invariant(), E2.j_invariant()}
+    j_targets = {F1.j_invariant(), F2.j_invariant()}
     return j_in == j_targets
 
 
@@ -174,12 +144,16 @@ def is_diagonal_and_has_codomain(ker_matrix, basis, M, domain_curves, codomain_c
     else:
         return False
 
-    # compute codomain
+    # compute codomain with x-only Montgomery isogenies (only the j-invariants are needed)
     F1, F2 = codomain_curves
-    rho1 = E1.isogeny(K_rho1, algorithm="factored")
-    rho2 = E2.isogeny(K_rho2, algorithm="factored")
+    E1_kum = KummerLine(E1)
+    E2_kum = KummerLine(E2)
+    rho1 = KummerLineIsogeny(E1_kum, E1_kum(K_rho1), ZZ(M))
+    rho2 = KummerLineIsogeny(E2_kum, E2_kum(K_rho2), ZZ(M))
+    G1 = rho1.codomain().curve()
+    G2 = rho2.codomain().curve()
 
-    return check_prod_isomorphic(rho1.codomain(), rho2.codomain(), F1, F2)
+    return check_prod_isomorphic(G1, G2, F1, F2)
 
 
 def rref_zmod(mat):
@@ -193,6 +167,7 @@ def rref_zmod(mat):
     along with basis_permutation, an array of indices which tracks which basis elements are used for the pivots (in case of column swaps).
     """
     # Create a mutable copy to avoid altering the original matrix
+    mat = copy(mat)
     perm = [0, 1, 2, 3]
     pivot1 = next(j for j in range(4) if mat[0, j].is_unit())
 
@@ -232,102 +207,34 @@ def reorder_basis_and_sums(basis, basis_sums, perm):
 
 
 def theta_matrix_basis_to_pts(ker_matrix, basis, basis_sums, tc_0, M):
-    """
-    Since general addition on theta coordinates is not implemented, we need this wrapper to deal with sign ambiguities. This actually may be an issue. Attempting to guess the correct sign by checking the codomain isogeny is a bad approach since isogeny computations are expensive, but also the weil pairing is not implemented on the theta structure, so while we can check that the kernel is maximal, checking it is isotropic is more difficult.
+    """Recover the two kernel generators, respecting the supplied pairwise sums.
 
-    To recoverthis, we simply have the prover provide the correct differences of enough of the basis points to compute generators.
+    Reduce to two pivots so each row needs one three-way addition. All scalar
+    ladders use tuples; the six sums preserve signs after a basis permutation.
     """
-
-    # With this formation of the matrix, we need only to compute B0 + v02*B2 + v03*B3 and B1 + v12*B2 + v13*B3.
     reduced_matrix, basis_perm = rref_zmod(ker_matrix)
     basis, basis_sums = reorder_basis_and_sums(basis, basis_sums, basis_perm)
-    v02, v03 = int(reduced_matrix[0, 2]), int(reduced_matrix[0, 3])
-    v12, v13 = int(reduced_matrix[1, 2]), int(reduced_matrix[1, 3])
 
-    assert len(basis_sums) == 6
-    # We are provided (in order) with B0 + B1, B0 + B2, B0 + B3, B1 + B2, B1 + B3, B2 + B3. We can use these to resolve sign ambiguities when building the kernel points.
+    A = ThetaArithmetic(tc_0)
+    results = []
 
-    B0, B1 = basis[0], basis[1]
-    v02B2 = tc_0.Mult(basis[2], v02)
-    v03B3 = tc_0.Mult(basis[3], v03)
-    B0_p_v02B2 = tc_0.Kxpy_xpy(v02, basis[2], basis[0], basis_sums[1])  # B0 + v02*B2
-    B0_p_v03B3 = tc_0.Kxpy_xpy(v03, basis[3], basis[0], basis_sums[2])  # B0 + v03*B3
-    B2_p_v03B3 = tc_0.Kxpy_xpy(v03, basis[3], basis[2], basis_sums[5])  # B2 + v03*B3
-    v02B2_p_v03B3 = tc_0.Kxpy_xpy(v02, basis[2], v03B3, B2_p_v03B3)  # v02*B2 + v03*B3
-    K1 = tc_0.Extended_Addition(
-        B0, v02B2, v03B3, B0_p_v02B2, v02B2_p_v03B3, B0_p_v03B3
-    )  # B0 + v02*B2 + v03*B3
+    # Each row represents B_row + a*B2 + b*B3. The supplied pairwise
+    # sums fix the relative signs for the three-way addition.
+    for row, (sum2_idx, sum3_idx) in ((0, (1, 2)), (1, (3, 4))):
+        a = int(reduced_matrix[row, 2])
+        b = int(reduced_matrix[row, 3])
+        X = basis[row]
+        Y = A.mul(a, basis[2])
+        Z = A.mul(b, basis[3])
 
-    v12B2 = tc_0.Mult(basis[2], v12)
-    v13B3 = tc_0.Mult(basis[3], v13)
-    B1_p_v12B2 = tc_0.Kxpy_xpy(v12, basis[2], basis[1], basis_sums[3])  # B1 + v12*B2
-    B1_p_v13B3 = tc_0.Kxpy_xpy(v13, basis[3], basis[1], basis_sums[4])  # B1 + v13*B3
-    B2_p_v13B3 = tc_0.Kxpy_xpy(v13, basis[3], basis[2], basis_sums[5])  # B2 + v13*B3
-    v12B2_p_v13B3 = tc_0.Kxpy_xpy(v12, basis[2], v13B3, B2_p_v13B3)  # v12*B2 + v13*B3
-    K2 = tc_0.Extended_Addition(
-        B1, v12B2, v13B3, B1_p_v12B2, v12B2_p_v13B3, B1_p_v13B3
-    )  # B1 + v12*B2 + v13*B3
+        XY = A.mul_add(a, basis[2], X, basis_sums[sum2_idx])
+        ZX = A.mul_add(b, basis[3], X, basis_sums[sum3_idx])
+        B2plusZ = A.mul_add(b, basis[3], basis[2], basis_sums[5])
+        YZ = A.mul_add(a, basis[2], Z, B2plusZ)
 
-    return K1, K2
+        results.append(normalize(A.extended_add(X, Y, Z, XY, YZ, ZX)))
 
-
-def correct_tc_for_prod(tc_0):
-    """
-    returns None if not an elliptic product, otherwise returns the tuple of elliptic curves (E1, E2) such that the theta structure is a product of theta structures on E1 and E2
-    """
-    K = tc_0.field
-    tc_0_coords = tc_0.numer
-    zeta_4 = K.gen()
-    assert zeta_4**2 == -1
-    is_ell_prod = Is_Elliptic_product(tc_0_coords)
-    if not is_ell_prod[0]:
-        return None
-
-    if is_ell_prod[1]:  # already split.
-        return is_ell_prod[1]
-    else:
-        i = is_ell_prod[2]  # (i,j) is zero even theta.
-        j = is_ell_prod[3]
-
-    if (i, j) == (0, 0):
-        tc_0_coords[2] *= zeta_4
-        tc_0_coords[3] *= zeta_4
-    is_ell_prod = Is_Elliptic_product(tc_0_coords)
-    if is_ell_prod[1]:
-        return tc_0_coords
-    else:
-        i = is_ell_prod[2]  # (i,j) is zero even theta.
-        j = is_ell_prod[3]
-    if i != 0 and j == 0:
-        assert i != 0
-        tc_0_coords = Theta_Hadamard(tc_0_coords)
-
-    is_ell_prod = Is_Elliptic_product(tc_0_coords)
-    if is_ell_prod[1]:
-        return tc_0_coords
-    else:
-        i = is_ell_prod[2]  # (i,j) is zero even theta.
-        j = is_ell_prod[3]
-    assert j != 0
-    if j == 1:
-        tc_0_coords[1], tc_0_coords[3] = (tc_0_coords[3], tc_0_coords[1])
-    elif j == 2:
-        tc_0_coords[2], tc_0_coords[3] = (tc_0_coords[3], tc_0_coords[2])
-
-    is_ell_prod = Is_Elliptic_product(tc_0_coords)
-    if is_ell_prod[1]:
-        return tc_0_coords
-    else:
-        i = is_ell_prod[2]  # (i,j) is zero even theta.
-        j = is_ell_prod[3]
-    assert i == 0 and j == 3
-    tc_0_coords[1] *= zeta_4
-    tc_0_coords[2] *= zeta_4
-
-    is_ell_prod = Is_Elliptic_product(tc_0_coords)
-    assert is_ell_prod[1]
-
-    return tc_0_coords
+    return tuple(results)
 
 
 def has_codomain_two_dim(ker_matrix, basis, basis_sums, M, domain: ThetaStructure, codomain_curves):
@@ -335,30 +242,25 @@ def has_codomain_two_dim(ker_matrix, basis, basis_sums, M, domain: ThetaStructur
     if not is_full_rank(ker_matrix, M):
         return False
 
-    # Converting basis to the correct type:
-    K = domain.base_ring()
-    tc_0 = NullCoord(domain.null_point().coords(), 1, K)
-    basis = [Coord(pt.coords(), 1, K) for pt in basis]
-    basis_sums = [Coord(pt.coords(), 1, K) for pt in basis_sums]
+    O = domain.coords()
+    basis = [pt.coords() for pt in basis]
+    basis_sums = [pt.coords() for pt in basis_sums]
 
-    K1, K2 = theta_matrix_basis_to_pts(ker_matrix, basis, basis_sums, tc_0, M)
+    K1, K2 = theta_matrix_basis_to_pts(ker_matrix, basis, basis_sums, O, M)
+
     try:
-        # The basis check and full-rank matrix already imply exact M-order here.
-        A = get_codomain_from_tc_odd(tc_0, [K1, K2], M, perform_checks=False)
-    except AssertionError:
-        raise ValueError("Isogeny passes through product, which is not implemented yet. Try again!")
+        # Basis validation and the full-rank matrix already imply exact M-order.
+        chain = ThreeIsogenyChain.from_degree(O, (K1, K2), M, perform_checks=False)
+        target = chain.codomain.O
+    except UnsupportedProductError:
+        raise
+    except ValueError:
+        return False
 
-    # Now convert A to product of curves
-    tc_prod = correct_tc_for_prod(A)
-    if tc_prod is None:
-        return False  # codomain not a product
+    if not ThetaArithmetic(target).is_product:
+        return False
 
-    tc_F1 = [tc_prod[0], tc_prod[1]]
-    tc_F2 = [tc_prod[0], tc_prod[2]]
-    lm_F1 = Lv2tnp_to_Legendre(tc_F1)[0]
-    lm_F2 = Lv2tnp_to_Legendre(tc_F2)[0]
-    F1 = Legendre_to_Elliptic(lm_F1)
-    F2 = Legendre_to_Elliptic(lm_F2)
+    F1, F2 = ProductTheta(target).curves
     E1, E2 = codomain_curves
     return check_prod_isomorphic(E1, E2, F1, F2)
 
@@ -389,9 +291,9 @@ def has_codomain_and_mapping_two_dim_and_nondiagonal(
     if zeta1 ** (N // 2) == 1:
         return False  # kernel not maximal.
 
-    _, _, _, computed_A, computed_images = mapping_E0xE1_to_A_even(
-        E1, E2, above_ker_points, N, points
-    )
+    chain = EllipticProductIsogeny.from_degree(above_ker_points, N, split=False)
+    computed_A = chain.codomain()
+    computed_images = [chain(P) for P in points]
     if computed_A != codomain:
         return False
 

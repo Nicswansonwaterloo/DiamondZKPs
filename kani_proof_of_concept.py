@@ -15,6 +15,7 @@ from helpers.ec_utils import (
 from helpers.helpers import (
     normalize_and_hash,
 )
+from helpers.theta_arithmetic import UnsupportedProductError
 from helpers.two_dim_utils import (
     has_codomain_and_mapping_two_dim_and_nondiagonal,
     has_codomain_two_dim,
@@ -24,9 +25,7 @@ from helpers.two_dim_utils import (
     randomize_basis_two_dim,
     randomize_diagonal_kernel,
 )
-from helpers.two_dim_wrappers import (
-    mapping_E0xE1_to_A_even,
-)
+from vendors.Theta_SageMath.theta_isogenies.product_isogeny import EllipticProductIsogeny
 from vendors.Theta_SageMath.theta_structures.couple_point import CouplePoint
 from vendors.Theta_SageMath.utilities.supersingular import (
     compute_linearly_independent_point,
@@ -179,9 +178,9 @@ def prover(sk, pk):
 
     # Compute Phi'. the pused isogeny, on the random basis.
     phi_prime_above_kernel = (Psi(above_kernel[0]), Psi(above_kernel[1]))
-    _, _, _, J, pushed_basis_with_aux_info = mapping_E0xE1_to_A_even(
-        F0, FAB, phi_prime_above_kernel, N, random_basis_with_aux_info, M
-    )
+    chain = EllipticProductIsogeny.from_degree(phi_prime_above_kernel, N, split=False)
+    J = chain.codomain()
+    pushed_basis_with_aux_info = [chain(P) for P in random_basis_with_aux_info]
 
     # Now we hash various public data to make the commitments.
     r01 = randint(0, 2**256 - 1)
@@ -284,6 +283,9 @@ def verifier(pk, challenge, response, commitment):
         ):
             return False
 
+    else:
+        return False
+
     return True
 
 
@@ -295,5 +297,5 @@ if __name__ == "__main__":
             for challenge in range(3):
                 assert verifier(pk, challenge, response_alg[challenge], commitment)
             break
-        except ValueError:
-            print("Odd isogeny contains an intermediate product. Trying again.")
+        except UnsupportedProductError as exc:
+            print(f"Product sign information is unavailable: {exc}. Trying again.")

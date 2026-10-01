@@ -16,16 +16,13 @@ random-number generator.
 ## Performance
 
 These research implementations are not currently practical. The available
-two-dimensional isogeny routines are particularly slow, with
-$(3,3)$-isogenies dominating Kani verification; replacing them with faster
-alternatives is left as future work.
-
+two-dimensional isogeny routines are particularly slow. Replacing them with highly perfomant alternatives is left as future work.
 | Protocol | Security | Prover | Verifier |
 |---|---:|---:|---:|
-| Cube-ZKP | 128 bits | 198 s | 82 s |
-| Kube-ZKP | 128 bits | 626 s | 135 s |
-| Kani-ZKP | 128 bits | 695 s | 16905 s |
-| Kani-Heuristic | 128 bits | 257 s | 3903 s |
+| Cube-ZKP | 128 bits | 139 s | 51 s |
+| Kube-ZKP | 128 bits | 449 s | 92 s |
+| Kani-ZKP | 128 bits | 547 s | 1030 s |
+| Kani-Heuristic | 128 bits | 196 s | 338 s |
 
 Windmill-ZKP was not benchmarked at 128-bit security because the corresponding
 M-SIDH prime exceeds 5,000 bits and is generally incomparable.
@@ -58,10 +55,9 @@ The semi-optimized Kani implementation can be run with:
 python kani_semi_optimized.py
 ```
 
-It remains very slow because of the $(3,3)$-isogeny computations. The
-$(\ell,\ell)$-isogeny path can also raise a `ValueError` when an intermediate
-principally polarized abelian variety is a product; the Kani entry points retry
-this known exceptional path.
+The $(3,3)$ chains support intermediate products and coprime-point transfer.
+Product evaluations need signed `CouplePoint` inputs to preserve component
+signs. Run `python two_dim_isogeny_checks.py` for the focused correctness checks.
 
 ## File organisation
 
@@ -93,10 +89,6 @@ this known exceptional path.
   repository (subdirectory `Theta-SageMath`) and is used under the MIT License.
   Copyright belongs to the original authors; see
   `vendors/Theta_SageMath/LICENSE`.
-- `vendors/EllEll_Isogeny_Sage/` is vendored from
-  [Yoshizumi-Ryo/ellell-isogeny_sage](https://github.com/Yoshizumi-Ryo/ellell-isogeny_sage)
-  and is used under the MIT License. Copyright belongs to the original authors;
-  see `vendors/EllEll_Isogeny_Sage/LICENSE`.
 - `vendors/Kummer_Isogeny/` is vendored from
   [GiacomoPope/KummerIsogeny](https://github.com/GiacomoPope/KummerIsogeny)
   and is used under the MIT License. Copyright belongs to the original authors;

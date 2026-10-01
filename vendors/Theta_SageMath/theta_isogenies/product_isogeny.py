@@ -1,3 +1,5 @@
+from sage.all import ZZ
+
 from vendors.Theta_SageMath.theta_structures.split_structure import SplitThetaStructure
 from vendors.Theta_SageMath.theta_structures.couple_point import CouplePoint
 from vendors.Theta_SageMath.theta_isogenies.morphism import Morphism
@@ -22,6 +24,8 @@ class EllipticProductIsogeny(Morphism):
     - strategy: the optimises strategy to compute a walk through the graph of
       images and doublings with a quasli-linear number of steps
     - zeta (optional): a second root of unity
+    - split (optional): if False, return the unsplit ThetaStructure and theta
+      points instead of elliptic curves and their points
 
     NOTE: if only the 2^n torsion is known, the isogeny should be computed with
     `EllipticProductIsogenySqrt()` which computes the last two steps without the
@@ -29,8 +33,21 @@ class EllipticProductIsogeny(Morphism):
     is slower)
     """
 
-    def __init__(self, kernel, n, strategy=None, zeta=None):
+    @classmethod
+    def from_degree(cls, kernel, degree, **kwargs):
+        """Construct from a power-of-two degree instead of a chain length."""
+        degree = ZZ(degree)
+        n = degree.valuation(2) if degree > 1 else 0
+        if n < 1 or degree != 2**n:
+            raise ValueError("Isogeny degree must be a power of 2 greater than one")
+        return cls(kernel, n, **kwargs)
+
+    def __init__(self, kernel, n, strategy=None, zeta=None, split=True):
+        n = ZZ(n)
+        if n < 1:
+            raise ValueError("Use a positive chain length")
         self.n = n
+        self._split = split
         self.E1, self.E2 = kernel[0].curves()
         self._zeta = zeta
         assert kernel[1].curves() == (self.E1, self.E2)
@@ -43,9 +60,11 @@ class EllipticProductIsogeny(Morphism):
 
         self._phis = self.isogeny_chain(kernel)
         T_last = self._phis[-1].codomain()
-        self._splitting = SplitThetaStructure(T_last)
-
-        self._codomain = self._splitting.curves()
+        if split:
+            self._splitting = SplitThetaStructure(T_last)
+            self._codomain = self._splitting.curves()
+        else:
+            self._codomain = T_last
 
     def get_strategy(self):
         return optimised_strategy(self.n)
@@ -117,8 +136,9 @@ class EllipticProductIsogeny(Morphism):
             # Push through points for the next step
             kernel_elements = [(phi(T1), phi(T2)) for T1, T2 in kernel_elements]
 
-        splitting_iso = SplittingIsomorphism(Th, zeta=self._zeta)
-        isogeny_chain.append(splitting_iso)
+        if self._split:
+            splitting_iso = SplittingIsomorphism(Th, zeta=self._zeta)
+            isogeny_chain.append(splitting_iso)
 
         return isogeny_chain
 
@@ -131,6 +151,8 @@ class EllipticProductIsogeny(Morphism):
             raise TypeError(
                 "EllipticProductIsogeny isogeny expects as input a CouplePoint on the domain product E1 x E2"
             )
+        if P.curves() != self._domain:
+            raise ValueError("Point belongs to a different domain product")
         for f in self._phis:
             P = f(P)
         return P
@@ -140,6 +162,9 @@ class EllipticProductIsogeny(Morphism):
         Evaluate a CouplePoint under the action of this isogeny. If lift=True,
         then the affine coordinates of the points are returned, otherwise points
         on the Kummer line are returned.
+        With split=False, return a theta point and ignore lift.
         """
         image_P = self.evaluate_isogeny(P)
+        if not self._split:
+            return image_P
         return self._splitting(image_P, lift=lift)

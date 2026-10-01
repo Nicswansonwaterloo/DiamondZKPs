@@ -9,7 +9,7 @@ from helpers.montgomery_helpers import (
     x_only_linear_comb,
 )
 from helpers.two_dim_utils import get_points_above_kernel
-from helpers.two_dim_wrappers import mapping_E0xE1_to_A_even
+from vendors.Theta_SageMath.theta_isogenies.product_isogeny import EllipticProductIsogeny
 from vendors.Kummer_Isogeny.kummer_isogeny import KummerLineIsogeny
 from vendors.Kummer_Isogeny.kummer_line import KummerLine
 from vendors.SQIsign2DSquare.rii import RanIso, make_precomputed_values
@@ -167,13 +167,9 @@ def prover(params, sk, pk):
         product_basis[0] + product_basis[3],
     ]
 
-    _, _, _, codomain, images = mapping_E0xE1_to_A_even(
-        EC,
-        EABC,
-        phi_prime_above_kernel,
-        N,
-        points_to_evaluate,
-    )
+    chain = EllipticProductIsogeny.from_degree(phi_prime_above_kernel, N, split=False)
+    codomain = chain.codomain()
+    images = [chain(P) for P in points_to_evaluate]
 
     # Split the final theta structure and resolve the signs of the four basis
     # images using the three additional sums.
@@ -377,9 +373,9 @@ def verifier(params, pk, challenge, response, commitment):
             product_basis[0] + product_basis[3],
         ]
 
-        _, _, _, codomain, images = mapping_E0xE1_to_A_even(
-            EC, EABC, phi_prime_above_kernel, N, points_to_evaluate
-        )
+        chain = EllipticProductIsogeny.from_degree(phi_prime_above_kernel, N, split=False)
+        codomain = chain.codomain()
+        images = [chain(P) for P in points_to_evaluate]
         splitting_iso = SplittingIsomorphism(codomain)
         split_product = SplitThetaStructure(splitting_iso.codomain())
         images = [split_product(splitting_iso(P)) for P in images]

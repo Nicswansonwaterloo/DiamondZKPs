@@ -117,6 +117,24 @@ def random_kummer_basis(xP, xQ, xPQ, order):
     return xP_new, xQ_new, xPQ_new, mat
 
 
+def x_only_push_pair(phi, P, Q):
+    """Images of P and Q under an x-only isogeny, with consistent signs.
+
+    Each lift is only defined up to sign; x(P - Q) fixes the relative sign, so
+    the pair agrees with one of the isogenies +phi or -phi.
+    """
+    domain = phi.domain()
+    xP = phi(domain(P))
+    xQ = phi(domain(Q))
+    xPQ = phi(domain(P - Q))
+    P_img = xP.curve_point()
+    Q_img = xQ.curve_point()
+
+    if (P_img - Q_img).x() != xPQ.x():
+        Q_img = -Q_img
+    return P_img, Q_img
+
+
 def is_supersingular_and_correct_characteristic_kummer(E_kum, p):
     """
     Faster alternative to is_supersingular_and_correct_characteristic.
