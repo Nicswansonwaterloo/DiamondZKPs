@@ -30,7 +30,6 @@ from vendors.Theta_SageMath.utilities.supersingular import (
     compute_linearly_independent_point,
     torsion_basis,
 )
-from vendors.Theta_SageMath.utilities.utils import speed_up_sagemath
 
 
 def key_gen(params):
@@ -291,26 +290,3 @@ def run_trial(trial_num, trials, params):
                 f"Trial {trial_num + 1}: product signs unavailable ({exc}). Retrying.",
                 flush=True,
             )
-
-
-if __name__ == "__main__":
-    import time
-    from multiprocessing import Pool
-    speed_up_sagemath()
-    from kani_params import KANI_128_PARAMS_HEUR as params
-
-    trials = 16
-    num_reps = params[8]
-    
-    with Pool(processes=trials) as pool:
-        results = pool.starmap(run_trial, [(i, trials, params) for i in range(trials)])
-    
-    prover_times = [r[0] for r in results]
-    verifier_times = [r[1] for r in results]
-    
-    avg_prover = sum(prover_times) / len(prover_times)
-    avg_verifier = sum(verifier_times) / len(verifier_times)
-    print(f"Average prover time: {avg_prover:.2f} seconds")
-    print(f"Average verifier time: {avg_verifier:.2f} seconds")
-    print(f"Prover time (after {num_reps} reps): {avg_prover * num_reps:.2f} seconds")
-    print(f"Verifier time (after {num_reps} reps): {avg_verifier * num_reps:.2f} seconds")

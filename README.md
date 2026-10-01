@@ -16,14 +16,17 @@ random-number generator.
 ## Performance
 
 These research implementations are not currently practical. The available
-two-dimensional isogeny routines are particularly slow. Replacing them with highly perfomant alternatives is left as future work.
+two-dimensional isogeny routines are particularly slow. Replacing them with
+highly performant alternatives is left as future work.
+
 | Protocol | Security | Prover | Verifier |
 |---|---:|---:|---:|
-| Cube-ZKP | 128 bits | 139 s | 51 s |
-| Kube-ZKP | 128 bits | 449 s | 92 s |
-| Kani-ZKP | 128 bits | 547 s | 1030 s |
-| Kani-Heuristic | 128 bits | 196 s | 338 s |
+| Cube-ZKP | 128 bits | 162 s | 62 s |
+| Kube-ZKP | 128 bits | 510 s | 109 s |
+| Kani-ZKP | 128 bits | 281 s | 325 s |
+| Kani-Heuristic | 128 bits | 98 s | 119 s |
 
+Measured on 2026-10-01 with SageMath 10.9 on an Apple M4 Max averaged over 10 trials.
 Windmill-ZKP was not benchmarked at 128-bit security because the corresponding
 M-SIDH prime exceeds 5,000 bits and is generally incomparable.
 
@@ -31,28 +34,22 @@ M-SIDH prime exceeds 5,000 bits and is generally incomparable.
 
 The repository was checked with SageMath 10.9. Activate a Python environment
 that provides SageMath, then run commands from the repository root so that
-imports from `helpers` and `vendors` resolve. You can confirm that the active
-interpreter is suitable with `python -c 'import sage.all'`.
+imports from `helpers` and `vendors` resolve. 
 
-Run the 128-bit Cube and Kube benchmarks with:
+Run the 128-bit benchmarks with:
 
 ```sh
-python cube_bench.py --trials 1
-python kube_bench.py --trials 1
+python cube_bench.py --trials 10 --workers 10
+python kube_bench.py --trials 10 --workers 10
+python kani_bench.py --trials 10 --workers 10
+python kani_bench.py --heuristic --trials 10 --workers 10
 ```
 
-Both benchmark drivers also accept `--workers N` for parallel, independent
-trials. These parameter sets are intentionally expensive. Run the assertion-based proof-of-concept checks with:
+Run the assertion-based proof-of-concept checks with:
 
 ```sh
 python windmill_proof_of_concept.py
 python kani_proof_of_concept.py
-```
-
-The semi-optimized Kani implementation can be run with:
-
-```sh
-python kani_semi_optimized.py
 ```
 
 The $(3,3)$ chains support intermediate products and coprime-point transfer.
@@ -75,6 +72,7 @@ signs. Run `python two_dim_isogeny_checks.py` for the focused correctness checks
 - `kani_proof_of_concept.py` is the direct Kani-Diamond-ZKP prototype with small
   embedded parameters. `kani_semi_optimized.py` uses the vendored `RanIso`
   construction, and `kani_params.py` generates and stores its parameter sets.
+  `kani_bench.py` benchmarks the standard and heuristic parameter sets.
 - `estimated_isogs.py` contains the handwritten proof-size and isogeny-count
   calculations used for protocol comparisons.
 - `helpers/` contains project-owned elliptic-curve, Kummer-line, hashing,
