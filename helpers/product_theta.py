@@ -139,7 +139,17 @@ class ProductTheta:
         values = hadamard(tuple(u * v * h for u, v, h in zip(U, V, A.Hinv)))
         i = next((i for i in range(4) if D[i] and S[i]), None)
         if i is None:
-            raise ValueError("Affine product addition has no common nonzero coordinate")
+            # Special case conserning a particular choice of 2-torsion on a product where the theta null becomes .  Riemann relations: scale * H[j] * W[j] = U[j] * V[j].
+            for a in (1, 2, 3):
+                H = hadamard(tuple(A.O[k] * A.O[k ^ a] for k in range(4)))
+                W = hadamard(tuple(S[k] * D[k ^ a] for k in range(4)))
+                j = next((j for j in range(4) if H[j] and W[j]), None)
+                if j is not None:
+                    U = hadamard(tuple(P[k] * P[k ^ a] for k in range(4)))
+                    V = hadamard(tuple(Q[k] * Q[k ^ a] for k in range(4)))
+                    scale = U[j] * V[j] / (H[j] * W[j])
+                    return tuple(scale * s for s in S)
+            raise ValueError("Affine product addition has no usable Riemann relation")
 
         # The addition identity gives D[i] * S[i], fixing the affine scale of S.
         scale = values[i] * A.inv4 / (D[i] * S[i])

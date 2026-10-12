@@ -247,6 +247,8 @@ class ThetaArithmetic:
             T = self.structure(P)
             return T.double().diff_addition(T, T).coords()
 
+        if self.is_product:
+            return self.mul(3, P)
         return normalize(self.diff_add(self.double(P), P, P))
 
     def triple_iter(self, P, n):

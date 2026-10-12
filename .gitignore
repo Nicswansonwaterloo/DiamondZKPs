@@ -31,5 +31,6 @@ MANIFEST
 
 *.pyspy
 
-# Local agent guidance
-/AGENTS.md
+# Local files
+AGENTS.md
+prep_submission.py

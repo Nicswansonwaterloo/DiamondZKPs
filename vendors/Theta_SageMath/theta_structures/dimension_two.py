@@ -348,7 +348,7 @@ class ThetaPoint:
                 raise TypeError(f"Cannot coerce input scalar {m = } to an integer")
 
         if m.is_zero():
-            return self.parent().zero()
+            return self
 
         P1 = self
         for _ in range(m):

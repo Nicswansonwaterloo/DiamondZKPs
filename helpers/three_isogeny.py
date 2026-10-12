@@ -35,11 +35,22 @@ class ThetaThreeIsogeny:
             self.diagonal = P[0].weil_pairing(Q[0], 3) == 1
             self.signed_generators = (Q, P, S, P - Q)
             self.change = self.domain_product.to_split
-            self.source = ThetaArithmetic(self.change(A.O))
+            split_origin = self.change(A.O)
             kernel_coords = tuple(self.domain_product.split_coords(T) for T in (P, Q, S))
-            O = self._compute(kernel_coords)
-            self.codomain = ThetaArithmetic(O)
-            return
+            # The invariant cubic sum may vanish in our lift. Must try different product theta structures until one works.
+            for change in ThetaArithmetic(split_origin).theta_changes():
+                self.product_change = change
+                self.source = ThetaArithmetic(change(split_origin))
+                if self.source.Hinv is None or self.source.Oinv is None:
+                    continue
+                try:
+                    O = self._compute(tuple(change(T) for T in kernel_coords))
+                except ZeroDivisionError:
+                    continue
+                if any(O):
+                    self.codomain = ThetaArithmetic(O)
+                    return
+            raise ValueError("Isogeny target vanishes in all supported product theta charts")
 
         P, Q, S = map(normalize, kernel)
 
@@ -176,7 +187,8 @@ class ThetaThreeIsogeny:
                 "Non-diagonal product evaluation needs signed component lifts"
             )
         signed = self.domain_product.lift(P)
-        P = normalize(self.domain_product.split_coords(signed))
+        split_point = self.domain_product.split_coords(signed)
+        P = normalize(self.product_change(split_point))
         if signed == self.domain_product.zero or any(
             signed in (R, -R) for R in self.signed_generators
         ):
@@ -184,7 +196,8 @@ class ThetaThreeIsogeny:
 
         total = [p**3 for p in P]
         for R, signed_R in zip(self.generators, self.signed_generators):
-            S = normalize(self.domain_product.split_coords(signed + signed_R))
+            split_sum = self.domain_product.split_coords(signed + signed_R)
+            S = normalize(self.product_change(split_sum))
             T = self.source.diff_add(S, R, P)
             c = self._scale(self.source.diff_add(T, R, S), P)
             delta2 = self.delta[R] ** 2

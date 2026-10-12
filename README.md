@@ -54,7 +54,7 @@ python kani_proof_of_concept.py
 
 The $(3,3)$ chains support intermediate products and coprime-point transfer.
 Product evaluations need signed `CouplePoint` inputs to preserve component
-signs. Run `python two_dim_isogeny_checks.py` for the focused correctness checks.
+signs.
 
 ## File organisation
 
